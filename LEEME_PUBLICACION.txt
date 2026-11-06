@@ -1,0 +1,7 @@
+FIAS DIRECTORIO v0.7 · ESTE ZIP SÍ PUEDE PUBLICARSE EN GITHUB PAGES.
+Poner index.html, config.js y assets/ en la raíz del repositorio.
+Iniciar sesión M365 en la URL configurada (redirect URI autorizada en Entra ID).
+Importar INDICE_PRIVADO_IMPORTABLE.json desde la opción en el Asistente inteligente.
+El JSON privado NO viene incluido en este ZIP y NUNCA se debe publicar.
+La aplicación revisa nuevas actas al sincronizar y cada 15 min mientras esté
+abierta; el índice local recién actualizado debe exportarse a un sitio seguro.
