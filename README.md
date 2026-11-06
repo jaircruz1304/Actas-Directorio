@@ -1,49 +1,39 @@
-# FIAS · Centro de decisiones del Directorio — v0.3
+# FIAS · Inteligencia de Directorio v0.5
 
-Portal documental con **interfaz nueva** (no derivada visualmente de los proyectos Donaciones / Movilizaciones) y autenticación Microsoft 365 / Microsoft Graph basada en el patrón técnico del portal Movilizaciones FIAS.
+## Alcance de esta entrega
 
-## Instalación
+Interfaz Enterprise nueva, independiente de los proyectos anteriores. Aplicación estática lista para **publicación en GitHub Pages** (no requiere npm ni compilar JSX/TSX). No se incluye ningún XLSX, PDF o datos institucionales dentro de los archivos públicos.
 
-```bash
-npm install
-npm run dev
-npm run build
-```
+- Autenticación delegada con Microsoft Entra ID/MSAL y acceso a matriz XLSX mediante Graph y enlaces de SharePoint del FIAS.
+- Búsqueda documental de matriz, exploración filtrada, estadísticas, detalle y enlace a la fuente.
+- Búsqueda neuronal real opcional: embeddings multilingües calculados **en el navegador**, con `@huggingface/transformers`. Requiere descargar un modelo del proveedor cuando se activa por primera vez, compatible con recursos y políticas de la red del usuario.
+- Lectura adicional de PDF a través de Microsoft Graph, recorriendo subcarpetas del enlace de repositorio. Extrae texto mediante PDF.js, agrupa pasajes en memoria y permite recuperar pasajes con nombre y páginas. Documentos escaneados que no contienen texto seleccionable requieren OCR que **no está incluido**.
+- Síntesis **extractiva** con referencias sin generar afirmaciones adicionales. Las respuestas **generativas** requieren una API IA institucional autenticada, no incluida en el despliegue público.
 
-### Antes de iniciar sesión
+## Instalación en GitHub Pages
 
-1. Registrar en Microsoft Entra ID la dirección de la aplicación como **Single-page application (SPA) redirect URI**, exactamente igual a su URL pública (o `http://localhost:5173/` para pruebas).
-2. Confirmar que la app identificada en `src/sharepoint.ts` está autorizada en el tenant para usar permisos delegados `User.Read`, `Files.Read.All` y `Sites.Read.All`, con consentimiento administrativo si el tenant lo requiere. Los identificadores tenant/client se tomaron del ejemplo Movilizaciones; se pueden sobrescribir mediante `VITE_ENTRA_TENANT_ID` y `VITE_ENTRA_CLIENT_ID`.
-3. El usuario debe tener permiso de lectura sobre la matriz compartida y los PDF del repositorio.
-4. Publicar en alojamiento HTTPS (salvo localhost), con redirección SPA a `index.html`.
+1. Extraer los archivos y copiar `index.html` y `assets/` **a la raíz del repositorio** `Actas-Directorio`.
+2. Abrir `https://jaircruz1304.github.io/Actas-Directorio/index.html`, limpiar caché del navegador (Ctrl+F5).
+3. En Microsoft Entra ID registrar como **SPA** el URI de redirección anterior para el identificador cliente configurado. Verificar consentimiento y permisos delegados de Microsoft Graph `User.Read`, `Files.Read.All`, `Sites.Read.All`. Emplear permisos mínimos que realmente se necesiten y aprobaciones del administrador.
+4. Iniciar sesión y sincronizar la matriz.
+5. Para indexar PDF, entrar a **Asistente inteligente → Indexar PDF de SharePoint**. La descarga de los PDF exige acceso a esos archivos y a las carpetas; algunas políticas CORS y de descargas temporales de Graph pueden impedir operar desde GitHub Pages.
+6. Activar la búsqueda semántica, que puede consumir memoria y descargar varios recursos externos. Los embeddings se calculan localmente y los documentos en RAM se pierden al recargar.
+7. Para síntesis generativa, configurar una API protegida por Entra ID con `scope` válido y procesamiento respaldado por un servicio Azure autorizado. **No colocar claves de IA en HTML/JS o GitHub Pages**.
 
-## Flujo de consulta en vivo
+## Límites y seguridad
 
-- MSAL 4 gestiona inicio de sesión Microsoft 365, sesión en sessionStorage, renovación de token y cierre.
-- Graph resuelve el enlace compartido mediante `/shares/u!{base64url}/driveItem`.
-- Desde el driveItem se obtiene la URL temporal de descarga y se lee el XLSX en memoria, sin subirlo a terceros.
-- Se indexan las hojas, asuntos y resoluciones; se heredan los enlaces de la misma acta cuando aparecen en filas posteriores.
-- Al pulsar **Sincronizar** se vuelve a consultar SharePoint. El portal **no se sincroniza automáticamente en segundo plano**.
-- Si Graph, las políticas del tenant o CORS de la URL temporal impiden descargar la matriz, se informa el error: puede usarse la importación local de contingencia.
+- No se verificó esta entrega contra el tenant del FIAS ni se ejecutó una ingesta de las actas protegidas. Las capacidades Graph requieren prueba en la cuenta corporativa.
+- La carpeta compartida se usa como **origen remoto**, no como archivo PDF adjunto. No se afirma haber descargado todos los documentos ni aplicado OCR.
+- En ausencia de una API corporativa configurada, se usa extracción y ranking; esto **no equivale** a respuestas generativas.
+- La IA generativa **no debe asumir** que una coincidencia temática es una resolución aprobada, ni inventar números, fechas o montos. Su backend debe validar los identificadores de evidencia frente al catálogo autenticado antes de procesar documentos, registrar auditoría, filtrar por permisos y devolver citas verificables.
+- La salida del servicio IA esperada es JSON `{ "answer": "...", "citations": ["id-registro", "pdf-id"] }`. Solo se muestran citas a identificadores presentes en las evidencias seleccionadas.
+- El archivo matriz incluye fechas, asuntos y resoluciones; los PDF pueden tener restricciones de acceso y protección de datos. Mantener todo procesamiento y retención de información conforme a las políticas del FIAS.
+- El lector PDF.js no hace OCR ni interpreta firmas, anexos o tablas complejas con garantía de exactitud.
 
-## Privacidad y alcance
+## Próximos pasos de producción
 
-- La distribución NO incluye una copia de los registros de la matriz Excel; para verlos se requiere inicio de sesión o importación manual.
-- No se usan proxies públicos, workers anónimos, claves secretas ni tokens persistidos por el portal fuera de la caché MSAL de sesión.
-- Los permisos de apertura de cada PDF siguen definidos por SharePoint.
-- No se extrae texto de PDF, no hay OCR ni IA semántica en esta versión; la búsqueda es textual sobre la matriz, y los resultados no son resúmenes generados por IA.
-- Los indicadores cuentan registros de asuntos/resoluciones por fila y actas agrupadas, no infieren cuáles decisiones están aprobadas.
+Arquitectura recomendada: Microsoft Entra ID → API Azure Functions autenticada → Graph (acceso delegado/OBO) → extracción/OCR Azure AI Document Intelligence → índice de fragmentos y metadatos en Azure AI Search → respuestas con Azure OpenAI/Azure AI Foundry y citas verificadas. Agregar auditoría, ACL por documento, sincronización incremental mediante delta queries, monitoreo, retención y pruebas de calidad antes de habilitar IA generativa.
 
-## Estructura
+## Pruebas
 
-- `src/sharepoint.ts`: autenticación, lectura Graph, descarga segura del Excel.
-- `src/data.ts`: índice en memoria, normalización de enlaces, años y etiquetas.
-- `src/main.tsx`: interfaz documental Enterprise, filtros, vistas, gráficos, panel detalle.
-- `src/style.css`: diseño responsive claro / oscuro.
-
-## Diagnóstico de accesos
-
-- **AADSTS50011**: la URL de redirección SPA no coincide con la registrada en Entra.
-- **403**: el usuario, el enlace compartido o el registro de aplicación no dispone del permiso necesario.
-- **Consent required**: aprobar los permisos delegados de Graph o configurar la app según las políticas del tenant.
-- **CORS en descarga**: revisar directivas de descarga de SharePoint. Un proxy corporativo autenticado o API backend administrada puede ser necesario; no usar un proxy público no autenticado para documentos institucionales.
+`node --check assets/app.js` se ejecutó sin errores sintácticos. En este entorno el navegador de pruebas bloqueó la navegación a localhost y file://, por lo que **no se han completado las pruebas visuales ni la validación del tenant**.
